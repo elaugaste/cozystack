@@ -1,13 +1,18 @@
 suite: mongodb TLS CR integration
 
 # Covers the spec.tls block in the PerconaServerMongoDB CR
-# and the spec.secrets.ssl reference to the pre-rendered leaf secret.
+# and the spec.secrets.ssl reference to the operator-managed leaf secret.
+#
+# TLS chain is fully managed by the PSMDB operator via its native cert-manager
+# integration when spec.secrets.ssl is set. The chart does NOT render
+# cert-manager Issuer/Certificate resources — see templates/mongodb.yaml for
+# a detailed explanation.
 #
 # Tri-state matrix:
 #   (a) external: false, tls.enabled unset  → TLS off (no spec.tls, no spec.secrets.ssl)
 #   (b) external: true,  tls.enabled unset  → TLS auto-on
 #   (c) external: true,  tls.enabled: false → TLS off (explicit override)
-#   (d) external: false, tls.enabled: true  → TLS on (only internal SANs rendered by certmanager)
+#   (d) external: false, tls.enabled: true  → TLS on (operator creates cert chain)
 
 release:
   name: mg-test
