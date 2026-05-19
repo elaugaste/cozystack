@@ -1,5 +1,30 @@
 {{- $clusterDomain := (index .Values._cluster "cluster-domain") | default "cozy.local" }}
 {{- $tlsEnabled := include "mongodb.tls.enabled" . | eq "true" -}}
+{{- /*
+TLS IMPLEMENTATION NOTE — operator-managed cert-manager chain
+=============================================================
+When TLS is enabled (spec.secrets.ssl is set), the PSMDB operator natively
+integrates with cert-manager and creates the full certificate chain itself:
+
+  1. Self-signed bootstrap Issuer
+  2. CA Certificate (10-year, rotationPolicy: Never)
+  3. CA-backed Issuer
+  4. Leaf server+client cert with SAN list covering per-replset service
+     (short, namespace, FQDN), per-pod headless DNS names, wildcards, and
+     localhost.
+
+The chart does NOT render cert-manager Issuer/Certificate resources to avoid
+orphaning the operator-managed ones. Chart-rendered resources would be ignored
+as trust anchors because the PSMDB operator controls the CA it embeds in pods.
+
+KNOWN LIMITATION — external hostname SANs:
+  When external: true, per-pod LoadBalancer hostnames are NOT included in the
+  operator-managed leaf certificate. Injecting custom SANs requires PSMDB
+  ≥ 1.22.0 (splitHorizons field). Cozystack currently ships PSMDB 1.21.1.
+  Until the operator is upgraded, external TLS connections will succeed only
+  if the client skips hostname verification or uses the pod's internal DNS.
+  Track as a follow-up: bump PSMDB to 1.22.0 and configure splitHorizons.
+*/}}
 ---
 apiVersion: psmdb.percona.com/v1
 kind: PerconaServerMongoDB

@@ -26,13 +26,23 @@ Each shard is a replica set, and mongos routers handle query routing.
 
 ### TLS Mode
 
-TLS is configured in `preferTLS` mode, which means the MongoDB server accepts both TLS and non-TLS connections.
+TLS is fully managed by the PSMDB operator via its native cert-manager integration. When TLS is enabled (explicitly or auto-enabled by `external: true`), the operator creates the complete certificate chain:
+
+- A self-signed CA Issuer and CA Certificate
+- A CA-backed Issuer
+- A leaf TLS certificate with SANs covering the replica set service, per-pod DNS names, wildcards, and localhost
+
+The chart does **not** render cert-manager `Issuer` or `Certificate` resources. The operator manages these directly, and chart-rendered cert-manager objects would be orphaned and ignored as trust anchors.
+
+TLS mode is set to `preferTLS`, which means the MongoDB server accepts both TLS and non-TLS connections.
 
 > **Note:** `preferTLS` is intentional because the operator's backup CronJob does not yet support TLS. Strict enforcement (`requireTLS`) will be added in a follow-up once the backup workflow supports it. To enforce TLS at the network layer in the meantime, restrict client access via NetworkPolicy.
 
+> **Known limitation — external hostname SANs:** When `external: true` is enabled, per-pod LoadBalancer hostnames are NOT included in the operator-managed leaf certificate. Injecting custom external SANs requires PSMDB ≥ 1.22.0 (`splitHorizons` field). Cozystack currently ships PSMDB 1.21.1. External TLS connections will succeed only if the client skips hostname verification or uses internal pod DNS names. This will be addressed when the operator is upgraded to 1.22.0.
+
 ### Sharding and TLS
 
-> **Warning:** When `sharding: true`, TLS coverage is incomplete — the leaf certificate covers only replica set member SANs (`rs0`). The `mongos` service hostnames are not included in the certificate. This means TLS connections to `mongos` routers will fail certificate validation. Adding `mongos` SANs to the certificate is tracked as a follow-up improvement.
+> **Warning:** When `sharding: true`, TLS coverage for `mongos` routers depends on the operator's SAN generation. The operator-managed certificate covers replica set member SANs; `mongos` endpoint coverage may be incomplete. TLS connections to `mongos` routers should be tested after enabling sharding with TLS.
 
 ### External Access
 
@@ -66,7 +76,7 @@ When the MongoDB release is uninstalled, the operator finalizers reclaim release
 
 **Not reclaimed automatically:**
 
-- TLS secrets `<release>-ssl` and `<release>-ssl-internal` (issued by cert-manager) remain in the namespace after uninstall. Delete them manually if no longer needed.
+- TLS secrets `<release>-ssl` and `<release>-ssl-internal` — created by the PSMDB operator via cert-manager — remain in the namespace after uninstall. Delete them manually if no longer needed. The operator also creates intermediate cert-manager `Issuer` and `Certificate` objects (named `<release>-*`); these must also be cleaned up manually if the operator is removed before the PSMDB CR is deleted.
 
 **Recovery from a stuck deletion:**
 
