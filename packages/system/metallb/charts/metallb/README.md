@@ -17,7 +17,7 @@ Kubernetes: `>= 1.19.0-0`
 | Repository | Name | Version |
 |------------|------|---------|
 |  | crds | 0.0.0 |
-| https://metallb.github.io/frr-k8s | frr-k8s | 0.0.20 |
+| https://metallb.github.io/frr-k8s | frr-k8s | 0.0.25 |
 
 ## Values
 
@@ -55,20 +55,22 @@ Kubernetes: `>= 1.19.0-0`
 | controller.serviceAccount.create | bool | `true` |  |
 | controller.serviceAccount.name | string | `""` |  |
 | controller.strategy.type | string | `"RollingUpdate"` |  |
-| controller.tlsCipherSuites | string | `""` |  |
-| controller.tlsMinVersion | string | `"VersionTLS12"` |  |
 | controller.tolerations | list | `[]` |  |
+| controller.webhookMode | string | `"enabled"` |  |
 | crds.enabled | bool | `true` |  |
 | crds.validationFailurePolicy | string | `"Fail"` |  |
-| frrk8s.enabled | bool | `false` |  |
+| frr-k8s.prometheus | string | `nil` |  |
+| frrk8s.enabled | bool | `true` |  |
 | frrk8s.external | bool | `false` |  |
 | frrk8s.namespace | string | `""` |  |
 | fullnameOverride | string | `""` |  |
 | imagePullSecrets | list | `[]` |  |
 | loadBalancerClass | string | `""` |  |
 | nameOverride | string | `""` |  |
-| prometheus.controllerMetricsTLSSecret | string | `""` |  |
-| prometheus.metricsPort | int | `7472` |  |
+| networkpolicies.apiPort | int | `6443` |  |
+| networkpolicies.defaultDeny | bool | `false` |  |
+| networkpolicies.enabled | bool | `false` |  |
+| prometheus.metricsPort | int | `9120` |  |
 | prometheus.namespace | string | `""` |  |
 | prometheus.podMonitor.additionalLabels | object | `{}` |  |
 | prometheus.podMonitor.annotations | object | `{}` |  |
@@ -99,9 +101,6 @@ Kubernetes: `>= 1.19.0-0`
 | prometheus.prometheusRule.staleConfig.enabled | bool | `true` |  |
 | prometheus.prometheusRule.staleConfig.labels.severity | string | `"warning"` |  |
 | prometheus.rbacPrometheus | bool | `true` |  |
-| prometheus.rbacProxy.pullPolicy | string | `nil` |  |
-| prometheus.rbacProxy.repository | string | `"gcr.io/kubebuilder/kube-rbac-proxy"` |  |
-| prometheus.rbacProxy.tag | string | `"v0.12.0"` |  |
 | prometheus.scrapeAnnotations | bool | `false` |  |
 | prometheus.serviceAccount | string | `""` |  |
 | prometheus.serviceMonitor.controller.additionalLabels | object | `{}` |  |
@@ -115,23 +114,26 @@ Kubernetes: `>= 1.19.0-0`
 | prometheus.serviceMonitor.speaker.additionalLabels | object | `{}` |  |
 | prometheus.serviceMonitor.speaker.annotations | object | `{}` |  |
 | prometheus.serviceMonitor.speaker.tlsConfig.insecureSkipVerify | bool | `true` |  |
-| prometheus.speakerMetricsTLSSecret | string | `""` |  |
 | rbac.create | bool | `true` |  |
 | speaker.affinity | object | `{}` |  |
+| speaker.bgpDebounceTimeout | string | `nil` | BGP debounce timeout for FRR configuration reloads, in milliseconds. Only applies when BGP type is frr. Default (when unset) is 3000 ms. This feature is experimental |
 | speaker.enabled | bool | `true` |  |
 | speaker.excludeInterfaces.enabled | bool | `true` |  |
 | speaker.extraContainers | list | `[]` |  |
-| speaker.frr.enabled | bool | `true` |  |
+| speaker.frr.enabled | bool | `false` |  |
 | speaker.frr.image.pullPolicy | string | `nil` |  |
 | speaker.frr.image.repository | string | `"quay.io/frrouting/frr"` |  |
-| speaker.frr.image.tag | string | `"9.1.0"` |  |
-| speaker.frr.metricsPort | int | `7473` |  |
+| speaker.frr.image.tag | string | `"10.5.3"` |  |
+| speaker.frr.metricsPort | int | `9121` |  |
 | speaker.frr.resources | object | `{}` |  |
 | speaker.frrMetrics.resources | object | `{}` |  |
 | speaker.ignoreExcludeLB | bool | `false` |  |
 | speaker.image.pullPolicy | string | `nil` |  |
 | speaker.image.repository | string | `"quay.io/metallb/speaker"` |  |
 | speaker.image.tag | string | `nil` |  |
+| speaker.initContainers.cpFrrFiles.resources | object | `{}` |  |
+| speaker.initContainers.cpMetrics.resources | object | `{}` |  |
+| speaker.initContainers.cpReloader.resources | object | `{}` |  |
 | speaker.labels | object | `{}` |  |
 | speaker.livenessProbe.enabled | bool | `true` |  |
 | speaker.livenessProbe.failureThreshold | int | `3` |  |
@@ -166,6 +168,11 @@ Kubernetes: `>= 1.19.0-0`
 | speaker.tolerateMaster | bool | `true` |  |
 | speaker.tolerations | list | `[]` |  |
 | speaker.updateStrategy.type | string | `"RollingUpdate"` |  |
+| tls.cipherSuites | string | `""` | Comma-separated list of TLS cipher suites. If empty, uses Go defaults. Only applies to TLS 1.2. |
+| tls.controllerMetricsTLSSecret | string | `""` | The name of the secret to be mounted in the controller pod to provide TLS certificates for metrics endpoints. If not present, a self-signed certificate is auto-generated. |
+| tls.curvePreferences | string | `""` | Comma-separated list of numeric CurveID values (e.g. 29,4588). See https://pkg.go.dev/crypto/tls#CurveID. If empty, uses Go defaults. |
+| tls.minVersion | string | `""` | Minimum TLS version (VersionTLS12 or VersionTLS13). Defaults to VersionTLS13. |
+| tls.speakerMetricsTLSSecret | string | `""` | The name of the secret to be mounted in the speaker pod to provide TLS certificates for metrics endpoints. If not present, a self-signed certificate is auto-generated. |
 
 ----------------------------------------------
 Autogenerated from chart metadata using [helm-docs v1.10.0](https://github.com/norwoodj/helm-docs/releases/v1.10.0)
