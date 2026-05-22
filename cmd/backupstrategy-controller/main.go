@@ -174,19 +174,36 @@ func main() {
 		os.Exit(1)
 	}
 
+	credentialsConfig := backupcontroller.BackupCredentialsConfig{
+		SourceNamespace:  os.Getenv("BACKUP_STORAGE_SECRET_NAMESPACE"),
+		SourceSecretName: os.Getenv("BACKUP_STORAGE_SECRET_NAME"),
+		TargetSecretName: os.Getenv("BACKUP_STORAGE_CREDS_SECRET_NAME"),
+		Endpoint:         os.Getenv("BACKUP_STORAGE_ENDPOINT"),
+		Region:           os.Getenv("BACKUP_STORAGE_REGION"),
+	}
+
+	if systemNamespaces := os.Getenv("BACKUP_STORAGE_SYSTEM_NAMESPACES"); systemNamespaces != "" {
+		if err := mgr.Add(backupcontroller.NewSystemCredentialsProjector(mgr.GetClient(), credentialsConfig, systemNamespaces, 0)); err != nil {
+			setupLog.Error(err, "unable to add SystemCredentialsProjector runnable")
+			os.Exit(1)
+		}
+	}
+
 	if err = (&backupcontroller.BackupJobReconciler{
-		Client:   mgr.GetClient(),
-		Scheme:   mgr.GetScheme(),
-		Recorder: mgr.GetEventRecorderFor("backup-controller"),
+		Client:            mgr.GetClient(),
+		Scheme:            mgr.GetScheme(),
+		Recorder:          mgr.GetEventRecorderFor("backup-controller"),
+		CredentialsConfig: credentialsConfig,
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "BackupJob")
 		os.Exit(1)
 	}
 
 	if err = (&backupcontroller.RestoreJobReconciler{
-		Client:   mgr.GetClient(),
-		Scheme:   mgr.GetScheme(),
-		Recorder: mgr.GetEventRecorderFor("restore-controller"),
+		Client:            mgr.GetClient(),
+		Scheme:            mgr.GetScheme(),
+		Recorder:          mgr.GetEventRecorderFor("restore-controller"),
+		CredentialsConfig: credentialsConfig,
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "RestoreJob")
 		os.Exit(1)

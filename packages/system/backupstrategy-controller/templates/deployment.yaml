@@ -35,6 +35,19 @@ spec:
         {{- else }}
         - --zap-log-level=info
         {{- end }}
+        env:
+        - name: BACKUP_STORAGE_SECRET_NAMESPACE
+          value: {{ .Values.backupStorage.namespace | quote }}
+        - name: BACKUP_STORAGE_SECRET_NAME
+          value: {{ .Values.backupStorage.systemSecretName | quote }}
+        - name: BACKUP_STORAGE_CREDS_SECRET_NAME
+          value: cozy-backups-creds
+        - name: BACKUP_STORAGE_ENDPOINT
+          value: {{ .Values.backupStorage.endpoint | quote }}
+        - name: BACKUP_STORAGE_REGION
+          value: {{ .Values.backupStorage.region | quote }}
+        - name: BACKUP_STORAGE_SYSTEM_NAMESPACES
+          value: {{ .Values.backupStorage.systemNamespaces | join "," | quote }}
         ports:
         - name: metrics
           containerPort: {{ splitList ":" .Values.backupStrategyController.metrics.bindAddress | mustLast }}

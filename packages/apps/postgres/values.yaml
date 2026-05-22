@@ -196,12 +196,12 @@ databases: {}
 ## @field {bool} enabled - Enable regular backups.
 ## @field {string} [schedule] - Legacy. Cron schedule (CNPG 6-field format) for the chart-emitted ScheduledBackup. Empty means no chart-managed schedule, which is the recommended setup when a `BackupClass` from `backups.cozystack.io` already drives backup orchestration. The chart still emits `spec.backup.barmanObjectStore` whenever `backup.enabled=true`, so `archive_command` runs and the BackupClass driver can take ad-hoc / Plan-driven backups against a live WAL archive.
 ## @field {string} [retentionPolicy] - Retention policy (e.g. "30d").
-## @field {string} [destinationPath] - Destination path for backups (e.g. s3://bucket/path/).
-## @field {string} [endpointURL] - S3 endpoint URL for uploads.
-## @field {string} [s3AccessKey] - Access key for S3 authentication. Ignored when `s3CredentialsSecret.name` is set.
-## @field {string} [s3SecretKey] - Secret key for S3 authentication. Ignored when `s3CredentialsSecret.name` is set.
-## @field {S3CredentialsSecret} [s3CredentialsSecret] - Pre-existing Secret with S3 credentials. When set, the chart references this Secret directly instead of materialising one from `s3AccessKey`/`s3SecretKey`. The CNPG backup driver writes this field on restore so credentials never land in the CR `.spec`.
-## @field {EndpointCA} [endpointCA] - Pre-existing Secret with the CA bundle Barman should trust when reaching a self-signed S3 endpoint. Used for both backup and bootstrap recovery. The CNPG backup driver writes this field on restore.
+## @field {string} [destinationPath] - DEPRECATED. Per-tenant S3 configuration is superseded by the platform-managed `cozy-default` BackupClass and the `cozy-backups` system bucket. Leave empty for new installations; the BackupClass driver picks up the system-managed coordinates. Kept for in-place upgrade compatibility.
+## @field {string} [endpointURL] - DEPRECATED. See `destinationPath`.
+## @field {string} [s3AccessKey] - DEPRECATED. Tenants no longer supply S3 keys; the system Bucket Secret is projected into the tenant namespace by the backup controller. Ignored when `s3CredentialsSecret.name` is set.
+## @field {string} [s3SecretKey] - DEPRECATED. See `s3AccessKey`.
+## @field {S3CredentialsSecret} [s3CredentialsSecret] - DEPRECATED. Pre-existing Secret with S3 credentials. Use the platform-managed `cozy-default` BackupClass instead. When set, the chart references this Secret directly (legacy chart-managed flow). The CNPG backup driver writes this field on restore so credentials never land in the CR `.spec`.
+## @field {EndpointCA} [endpointCA] - DEPRECATED. Pre-existing Secret with the CA bundle Barman should trust when reaching a self-signed S3 endpoint. Used for both backup and bootstrap recovery in the legacy chart-managed flow.
 
 ## @param {Backup} backup - Backup configuration.
 backup:

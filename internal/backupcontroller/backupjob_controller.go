@@ -2,6 +2,7 @@ package backupcontroller
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -27,8 +28,9 @@ type BackupJobReconciler struct {
 	client.Client
 	dynamic.Interface
 	meta.RESTMapper
-	Scheme   *runtime.Scheme
-	Recorder record.EventRecorder
+	Scheme            *runtime.Scheme
+	Recorder          record.EventRecorder
+	CredentialsConfig BackupCredentialsConfig
 }
 
 func (r *BackupJobReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
@@ -46,10 +48,25 @@ func (r *BackupJobReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 		return ctrl.Result{}, err
 	}
 
+	// Skip terminal BackupJobs: a Succeeded/Failed run must not keep
+	// projecting Secrets or re-running dispatch on every requeue, which
+	// would otherwise materialise cozy-backups-creds in tenant namespaces
+	// long after the BackupJob is done and pin needless work on the
+	// apiserver.
+	if j.Status.Phase == backupsv1alpha1.BackupJobPhaseSucceeded || j.Status.Phase == backupsv1alpha1.BackupJobPhaseFailed {
+		logger.V(1).Info("BackupJob already terminal, skipping", "phase", j.Status.Phase)
+		return ctrl.Result{}, nil
+	}
+
 	// Normalize ApplicationRef (default apiGroup if not specified)
 	normalizedAppRef := NormalizeApplicationRef(j.Spec.ApplicationRef)
 
-	// Resolve BackupClass
+	// Resolve BackupClass first so we know whether this BackupJob even
+	// targets a strategy this controller owns. Projecting credentials
+	// before this point would (a) leak cozy-backups-creds into namespaces
+	// that use third-party strategies and (b) terminally fail BackupJobs
+	// with an unrelated pre-existing cozy-backups-creds (ownership guard
+	// kicks in even though no platform strategy is involved).
 	resolved, err := ResolveBackupClass(ctx, r.Client, j.Spec.BackupClassName, normalizedAppRef)
 	if err != nil {
 		logger.Error(err, "failed to resolve BackupClass", "backupClassName", j.Spec.BackupClassName)
@@ -70,6 +87,23 @@ func (r *BackupJobReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 			"expected", strategyv1alpha1.GroupVersion.Group,
 			"got", *strategyRef.APIGroup)
 		return ctrl.Result{}, nil
+	}
+
+	// Now project the platform-managed S3 credentials into the tenant
+	// namespace so default Strategy CRs can reference a deterministic
+	// Secret name. The projection is idempotent and silently skipped on
+	// clusters where it is not configured (legacy chart-managed flow).
+	//
+	// Failure handling: SourceSecretMissing / APIError are transient — the
+	// Bucket controller may not have produced the source Secret yet on a
+	// fresh install. Mark Ready=False and requeue rather than terminally
+	// failing the BackupJob (which would force tenants to recreate it and
+	// would silently fail Plan-driven runs). TargetSecretNotOwned and
+	// SourceSecretMalformed are operator-visible misconfigurations that
+	// will not self-heal — fail terminally so the tenant gets a clear
+	// message.
+	if err := ProjectBackupCredentials(ctx, r.Client, r.CredentialsConfig, j.Namespace); err != nil {
+		return r.handleProjectionError(ctx, j, err)
 	}
 
 	logger.Info("processing BackupJob", "backupjob", j.Name, "strategyKind", strategyRef.Kind, "backupClassName", j.Spec.BackupClassName)
@@ -141,6 +175,29 @@ func (r *BackupJobReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&backupsv1alpha1.BackupJob{}).
 		Complete(r)
+}
+
+// handleProjectionError classifies a credentials-projection error as
+// transient (requeue) or terminal (mark Failed). Transient errors record
+// a Ready=False condition without setting Phase=Failed so the BackupJob
+// resumes once the underlying issue (source Secret propagation, apiserver
+// hiccup) clears.
+func (r *BackupJobReconciler) handleProjectionError(ctx context.Context, j *backupsv1alpha1.BackupJob, err error) (ctrl.Result, error) {
+	logger := getLogger(ctx)
+	if IsTransient(err) {
+		meta.SetStatusCondition(&j.Status.Conditions, metav1.Condition{
+			Type:    "Ready",
+			Status:  metav1.ConditionFalse,
+			Reason:  "CredentialsProjectionPending",
+			Message: err.Error(),
+		})
+		if updateErr := r.Status().Update(ctx, j); updateErr != nil {
+			logger.Error(updateErr, "failed to update BackupJob status to projection-pending")
+		}
+		logger.Info("backup credentials projection transient failure; requeueing", "message", err.Error())
+		return ctrl.Result{RequeueAfter: CredentialsProjectionRequeue}, nil
+	}
+	return r.markBackupJobFailed(ctx, j, fmt.Sprintf("failed to project backup credentials: %v", err))
 }
 
 // markBackupJobFailed records a terminal Failed phase on the BackupJob.

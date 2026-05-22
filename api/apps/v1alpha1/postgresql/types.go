@@ -59,28 +59,28 @@ type ConfigSpec struct {
 }
 
 type Backup struct {
-	// Destination path for backups (e.g. s3://bucket/path/).
+	// DEPRECATED. Per-tenant S3 configuration is superseded by the platform-managed `cozy-default` BackupClass and the `cozy-backups` system bucket. Leave empty for new installations; the BackupClass driver picks up the system-managed coordinates. Kept for in-place upgrade compatibility.
 	// +kubebuilder:default:="s3://bucket/path/to/folder/"
 	DestinationPath string `json:"destinationPath,omitempty"`
 	// Enable regular backups.
 	// +kubebuilder:default:=false
 	Enabled bool `json:"enabled"`
-	// Pre-existing Secret with the CA bundle Barman should trust when reaching a self-signed S3 endpoint. Used for both backup and bootstrap recovery. The CNPG backup driver writes this field on restore.
+	// DEPRECATED. Pre-existing Secret with the CA bundle Barman should trust when reaching a self-signed S3 endpoint. Used for both backup and bootstrap recovery in the legacy chart-managed flow.
 	// +kubebuilder:default:={}
 	EndpointCA EndpointCA `json:"endpointCA,omitempty"`
-	// S3 endpoint URL for uploads.
+	// DEPRECATED. See `destinationPath`.
 	// +kubebuilder:default:="http://minio-gateway-service:9000"
 	EndpointURL string `json:"endpointURL,omitempty"`
 	// Retention policy (e.g. "30d").
 	// +kubebuilder:default:="30d"
 	RetentionPolicy string `json:"retentionPolicy,omitempty"`
-	// Access key for S3 authentication. Ignored when `s3CredentialsSecret.name` is set.
+	// DEPRECATED. Tenants no longer supply S3 keys; the system Bucket Secret is projected into the tenant namespace by the backup controller. Ignored when `s3CredentialsSecret.name` is set.
 	// +kubebuilder:default:="<your-access-key>"
 	S3AccessKey string `json:"s3AccessKey,omitempty"`
-	// Pre-existing Secret with S3 credentials. When set, the chart references this Secret directly instead of materialising one from `s3AccessKey`/`s3SecretKey`. The CNPG backup driver writes this field on restore so credentials never land in the CR `.spec`.
+	// DEPRECATED. Pre-existing Secret with S3 credentials. Use the platform-managed `cozy-default` BackupClass instead. When set, the chart references this Secret directly (legacy chart-managed flow). The CNPG backup driver writes this field on restore so credentials never land in the CR `.spec`.
 	// +kubebuilder:default:={}
 	S3CredentialsSecret S3CredentialsSecret `json:"s3CredentialsSecret,omitempty"`
-	// Secret key for S3 authentication. Ignored when `s3CredentialsSecret.name` is set.
+	// DEPRECATED. See `s3AccessKey`.
 	// +kubebuilder:default:="<your-secret-key>"
 	S3SecretKey string `json:"s3SecretKey,omitempty"`
 	// Legacy. Cron schedule (CNPG 6-field format) for the chart-emitted ScheduledBackup. Empty means no chart-managed schedule, which is the recommended setup when a `BackupClass` from `backups.cozystack.io` already drives backup orchestration. The chart still emits `spec.backup.barmanObjectStore` whenever `backup.enabled=true`, so `archive_command` runs and the BackupClass driver can take ad-hoc / Plan-driven backups against a live WAL archive.

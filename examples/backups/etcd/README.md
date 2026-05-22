@@ -1,5 +1,15 @@
 # Etcd backup/restore example
 
+> **Heads up — most clusters do not need this walk-through.** Cozystack
+> ships a platform-managed `cozy-default` `BackupClass` together with
+> the system bucket `cozy-backups`. Tenants reference `cozy-default`
+> directly from BackupJob / Plan / RestoreJob without provisioning a
+> Bucket or supplying S3 credentials. See
+> [`operations/services/backup-classes`](https://cozystack.io/docs/next/operations/services/backup-classes/).
+> The walk-through below covers the **legacy** path that wires a
+> per-app Bucket and bespoke BackupClass — useful for tuned non-default
+> policies.
+
 This directory shows how to back up and restore a Cozystack-managed `Etcd`
 application using the cluster's `Etcd` backup strategy driver. The driver
 delegates to the [etcd-operator][etcd-operator]: each Cozystack `BackupJob`

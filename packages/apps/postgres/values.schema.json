@@ -233,7 +233,7 @@
       ],
       "properties": {
         "destinationPath": {
-          "description": "Destination path for backups (e.g. s3://bucket/path/).",
+          "description": "DEPRECATED. Per-tenant S3 configuration is superseded by the platform-managed `cozy-default` BackupClass and the `cozy-backups` system bucket. Leave empty for new installations; the BackupClass driver picks up the system-managed coordinates. Kept for in-place upgrade compatibility.",
           "type": "string",
           "default": "s3://bucket/path/to/folder/"
         },
@@ -243,7 +243,7 @@
           "default": false
         },
         "endpointCA": {
-          "description": "Pre-existing Secret with the CA bundle Barman should trust when reaching a self-signed S3 endpoint. Used for both backup and bootstrap recovery. The CNPG backup driver writes this field on restore.",
+          "description": "DEPRECATED. Pre-existing Secret with the CA bundle Barman should trust when reaching a self-signed S3 endpoint. Used for both backup and bootstrap recovery in the legacy chart-managed flow.",
           "type": "object",
           "default": {},
           "properties": {
@@ -260,7 +260,7 @@
           }
         },
         "endpointURL": {
-          "description": "S3 endpoint URL for uploads.",
+          "description": "DEPRECATED. See `destinationPath`.",
           "type": "string",
           "default": "http://minio-gateway-service:9000"
         },
@@ -270,12 +270,12 @@
           "default": "30d"
         },
         "s3AccessKey": {
-          "description": "Access key for S3 authentication. Ignored when `s3CredentialsSecret.name` is set.",
+          "description": "DEPRECATED. Tenants no longer supply S3 keys; the system Bucket Secret is projected into the tenant namespace by the backup controller. Ignored when `s3CredentialsSecret.name` is set.",
           "type": "string",
           "default": "\u003cyour-access-key\u003e"
         },
         "s3CredentialsSecret": {
-          "description": "Pre-existing Secret with S3 credentials. When set, the chart references this Secret directly instead of materialising one from `s3AccessKey`/`s3SecretKey`. The CNPG backup driver writes this field on restore so credentials never land in the CR `.spec`.",
+          "description": "DEPRECATED. Pre-existing Secret with S3 credentials. Use the platform-managed `cozy-default` BackupClass instead. When set, the chart references this Secret directly (legacy chart-managed flow). The CNPG backup driver writes this field on restore so credentials never land in the CR `.spec`.",
           "type": "object",
           "default": {},
           "properties": {
@@ -297,7 +297,7 @@
           }
         },
         "s3SecretKey": {
-          "description": "Secret key for S3 authentication. Ignored when `s3CredentialsSecret.name` is set.",
+          "description": "DEPRECATED. See `s3AccessKey`.",
           "type": "string",
           "default": "\u003cyour-secret-key\u003e"
         },

@@ -12,3 +12,48 @@ backupStrategyController:
     limits:
       cpu: 500m
       memory: 128Mi
+
+# backupStorage describes the platform-managed S3 bucket used by every
+# default BackupClass strategy. The bucket lives in the backup-controller
+# namespace and is provisioned through the apps.cozystack.io/Bucket CR.
+# Tenants never see these coordinates directly — they reference cozy-default
+# BackupClass and the backup-controller projects credentials per BackupJob.
+backupStorage:
+  # provisionBucket controls whether to create the apps.cozystack.io/Bucket CR.
+  # Set to false when the cluster runs against an external S3 (no SeaweedFS)
+  # and the admin manages the credentials Secret manually.
+  provisionBucket: true
+  namespace: cozy-backup-controller
+  bucketName: cozy-backups
+  # endpoint is wired into every default Strategy CR at chart-render time.
+  # Switching to an https:// URL silently enables TLS in the MariaDB
+  # strategy (tls.enabled is computed from the scheme). Make sure the CA
+  # bundle is reachable to the operator (mariadb's tls.caSecretKeyRef, the
+  # FDB pod ca-cert volume, Velero's BSL caCert field) before flipping it.
+  endpoint: http://seaweedfs-s3.tenant-root.svc.cluster.local:8333
+  region: us-east-1
+  forcePathStyle: true
+  # systemSecretName — the human-friendly Secret produced by the Bucket
+  # application in the backup-controller namespace. The Bucket release is
+  # wrapped with the bucket-rd "bucket-" prefix (see
+  # packages/system/bucket-rd/cozyrds/bucket.yaml), so the human-friendly
+  # Secret rendered by packages/system/bucket/templates/user-credentials.yaml
+  # is named <bucket-release>-<user>-credentials. The projector also
+  # tolerates the raw COSI Secret format (single BucketInfo JSON key) so a
+  # cluster that wires an external S3 Secret manually still works.
+  systemSecretName: bucket-cozy-backups-system-credentials
+  # systemNamespaces — namespaces where the controller eagerly projects
+  # cozy-backups-creds so long-lived static references (Velero BSL, FDB
+  # operator deployments) keep finding the Secret without on-demand
+  # rendering. Tenants are projected lazily during BackupJob reconcile.
+  systemNamespaces:
+    - cozy-velero
+
+# velero — opt-in BSL rendering. The cozy-default BackupStorageLocation is
+# created in cozy-velero by templates/velero-bsl.yaml so endpoint/bucket/
+# region come from the same backupStorage block used by Strategy CRs and
+# the projector, eliminating drift. Disable this when the Velero chart is
+# not installed (no CRD).
+velero:
+  bslEnabled: true
+  namespace: cozy-velero

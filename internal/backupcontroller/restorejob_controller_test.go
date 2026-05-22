@@ -270,6 +270,79 @@ func newRestoreJobTestClient(t *testing.T, objs ...client.Object) client.Client 
 		Build()
 }
 
+// TestHandleRestoreProjectionError mirrors TestHandleProjectionError for
+// the restore path: transient projection errors (source not yet
+// propagated, apiserver hiccup) must requeue with Ready=False, terminal
+// misconfig must mark Failed. Without this test the duplicated
+// classification in restore could drift away from the BackupJob version.
+func TestHandleRestoreProjectionError(t *testing.T) {
+	cases := []struct {
+		name        string
+		err         error
+		wantRequeue bool
+		wantPhase   backupsv1alpha1.RestoreJobPhase
+		wantReason  string
+	}{
+		{
+			name:        "source missing requeues",
+			err:         &ProjectionError{Reason: ReasonSourceMissing, Message: "src missing"},
+			wantRequeue: true,
+			wantReason:  "CredentialsProjectionPending",
+		},
+		{
+			name:        "api error requeues",
+			err:         &ProjectionError{Reason: ReasonAPIError, Message: "hiccup"},
+			wantRequeue: true,
+			wantReason:  "CredentialsProjectionPending",
+		},
+		{
+			name:       "malformed source is terminal",
+			err:        &ProjectionError{Reason: ReasonSourceMalformed, Message: "no accessKey"},
+			wantPhase:  backupsv1alpha1.RestoreJobPhaseFailed,
+			wantReason: "RestoreFailed",
+		},
+		{
+			name:       "unowned target is terminal",
+			err:        &ProjectionError{Reason: ReasonTargetNotOwned, Message: "owned by tenant"},
+			wantPhase:  backupsv1alpha1.RestoreJobPhaseFailed,
+			wantReason: "RestoreFailed",
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			rj := &backupsv1alpha1.RestoreJob{ObjectMeta: metav1.ObjectMeta{Namespace: "ns", Name: "rj"}}
+			c := newRestoreJobTestClient(t, rj)
+			r := &RestoreJobReconciler{Client: c, Recorder: record.NewFakeRecorder(8)}
+			res, err := r.handleProjectionError(context.Background(), rj, tc.err)
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if tc.wantRequeue {
+				if res.RequeueAfter == 0 {
+					t.Fatalf("expected requeue, got %+v", res)
+				}
+				if rj.Status.Phase == backupsv1alpha1.RestoreJobPhaseFailed {
+					t.Fatalf("transient must not set Failed, got %q", rj.Status.Phase)
+				}
+			} else {
+				if res.RequeueAfter != 0 {
+					t.Fatalf("terminal must not requeue, got %+v", res)
+				}
+				if rj.Status.Phase != tc.wantPhase {
+					t.Fatalf("expected Phase=%q, got %q", tc.wantPhase, rj.Status.Phase)
+				}
+			}
+			cond := meta.FindStatusCondition(rj.Status.Conditions, "Ready")
+			if cond == nil {
+				t.Fatalf("Ready condition not set: %+v", rj.Status.Conditions)
+			}
+			if cond.Reason != tc.wantReason {
+				t.Errorf("Ready.Reason: got %q want %q", cond.Reason, tc.wantReason)
+			}
+		})
+	}
+}
+
 // TestMarkRestoreJobFailed_DoesNotAppendDuplicateReady locks in the fix:
 // markRestoreJobFailed used to `append` to Status.Conditions, which violates
 // the +listType=map +listMapKey=type contract on the field. Two terminal

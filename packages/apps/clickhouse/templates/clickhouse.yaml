@@ -169,6 +169,11 @@ spec:
 {{- $regionKey := "region" }}
 {{- $accessKeyKey := "accessKey" }}
 {{- $secretKeyKey := "secretKey" }}
+{{- $s3Path := default .Release.Name .Values.backup.s3PathOverride }}
+{{- if .Values.backup.useSystemBucket }}
+{{- $sidecarSecretName = "cozy-backups-creds" }}
+{{- $s3Path = printf "%s/%s" .Release.Namespace .Release.Name }}
+{{- else }}
 {{- with .Values.backup.s3CredentialsSecret }}
 {{- if .name }}
 {{- $sidecarSecretName = .name }}
@@ -177,6 +182,7 @@ spec:
 {{- if .regionKey }}{{ $regionKey = .regionKey }}{{ end }}
 {{- if .accessKeyIDKey }}{{ $accessKeyKey = .accessKeyIDKey }}{{ end }}
 {{- if .secretAccessKeyKey }}{{ $secretKeyKey = .secretAccessKeyKey }}{{ end }}
+{{- end }}
 {{- end }}
 {{- end }}
             - name: clickhouse-backup
@@ -214,7 +220,7 @@ spec:
                   S3_FORCE_PATH_STYLE=false to their own clickhouse-backup
                   config.
                 */}}
-                {{- if or (not (eq (default "" .Values.backup.s3CredentialsSecret.name) "")) .Values.backup.endpoint }}
+                {{- if or .Values.backup.useSystemBucket (not (eq (default "" .Values.backup.s3CredentialsSecret.name) "")) .Values.backup.endpoint }}
                 - name: S3_FORCE_PATH_STYLE
                   value: "true"
                 {{- end }}
@@ -248,7 +254,7 @@ spec:
                   release's prefix (set backup.s3PathOverride).
                 */}}
                 - name: S3_PATH
-                  value: {{ default .Release.Name .Values.backup.s3PathOverride | quote }}
+                  value: {{ $s3Path | quote }}
                 - name: S3_BUCKET
                   valueFrom: { secretKeyRef: { name: {{ $sidecarSecretName | quote }}, key: {{ $bucketKey | quote }} } }
                 - name: S3_ENDPOINT
